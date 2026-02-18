@@ -126,4 +126,107 @@ class EnamadService2
 
         return $output;
     }
+
+    public function secondPage(string $href, $domain): array
+    {
+        $ch = curl_init();
+
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $href,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_REFERER => 'https://' . $domain,
+            CURLOPT_USERAGENT => 'Mozilla/5.0',
+        ]);
+
+        $html = curl_exec($ch);
+
+        if (!$html) {
+            throw new \Exception(curl_error($ch));
+        }
+
+        curl_close($ch);
+
+
+        libxml_use_internal_errors(true);
+
+        $dom = new \DOMDocument();
+        $dom->loadHTML($html);
+
+        $xpath = new \DOMXPath($dom);
+
+        $rows = $xpath->query("//div[contains(@class,'mainul')]//div[contains(@class,'row')]");
+
+
+        $result = [
+            'owner' => null,
+            'grantDate' => null,
+            'validTo' => null,
+            'address' => null,
+            'phone' => null,
+            'email' => null,
+            'responseTime' => null,
+        ];
+
+
+        foreach ($rows as $row) {
+
+            $label = trim($xpath->query(".//div[contains(@class,'txtbold')]", $row)->item(0)->textContent);
+
+            $value = trim(
+                preg_replace(
+                    '/\s+/',
+                    ' ',
+                    str_replace("\xC2\xA0", '', $xpath->query(".//div[contains(@class,'licontent') and not(contains(@class,'txtbold'))]", $row)->item(0)->textContent)
+                )
+            );
+
+
+            switch (true) {
+
+                case str_contains($label, 'صاحب امتیاز'):
+                    $result['owner'] = $value;
+                    break;
+
+                case str_contains($label, 'تاریخ اعطا'):
+                    $result['grantDate'] = str_replace('/', '-', $value);
+                    break;
+
+                case str_contains($label, 'تاریخ اعتبار'):
+
+                    preg_match('/(\d{4})\/(\d{2})\/(\d{2})/', $value, $match);
+
+                    if ($match) {
+
+                        $result['validTo'] = "{$match[1]}-{$match[2]}-{$match[3]}";
+                    }
+
+                    break;
+
+                case str_contains($label, 'آدرس'):
+                    $result['address'] = $value;
+                    break;
+
+                case str_contains($label, 'تلفن'):
+                    $result['phone'] = $value;
+                    break;
+
+                case str_contains($label, 'پست الكترونیكی'):
+                    $result['email'] = str_replace('[at]', '@', $value);
+                    break;
+
+                case str_contains($label, 'ساعت پاسخگویی'):
+                    $result['responseTime'] = $value;
+                    break;
+            }
+        }
+
+        return $result;
+    }
+
+
+
+
 }
